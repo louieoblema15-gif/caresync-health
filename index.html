@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CareSync Health</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body{margin:0;font-family:'Segoe UI';background:linear-gradient(135deg,#0f2027,#2c5364);} 
+.app{max-width:420px;margin:auto;background:#f8fbff;min-height:100vh;border-radius:20px;overflow:hidden;}
+header{background:linear-gradient(135deg,#00c9a7,#0077b6);color:white;padding:20px;text-align:center;position:relative;}
+header h2{margin:0;font-size:22px;}
+header p{margin:5px 0 0;font-size:14px;opacity:0.9;}
+.logo{font-size:28px;margin-bottom:5px;}
+nav{display:flex;background:#e6f4f1;}
+nav button{flex:1;padding:10px;border:none;background:none;font-weight:bold;cursor:pointer;color:#0077b6;}
+.container{padding:15px;}
+.card{background:white;border-radius:15px;padding:15px;margin-bottom:15px;box-shadow:0 5px 15px rgba(0,0,0,0.08);} 
+.hidden{display:none;} 
+button.action{background:linear-gradient(135deg,#00c9a7,#0077b6);color:white;border:none;padding:10px;border-radius:10px;width:100%;margin-top:10px;font-weight:bold;}
+.badge{padding:6px 10px;border-radius:10px;color:white;font-weight:bold;display:inline-block;margin-top:10px;}
+.green{background:#2ecc71;} .amber{background:#f39c12;} .red{background:#e74c3c;}
+.chat-box{height:200px;overflow-y:auto;background:#f1f7fb;padding:10px;border-radius:10px;}
+.message{padding:8px;margin:5px;border-radius:10px;}
+.user{background:#c7f0e8;text-align:right;}
+.nurse{background:#d6eaf8;}
+input{border-radius:10px;border:1px solid #ccc;margin-top:5px;padding:8px;width:100%;}
+.small{font-size:12px;color:#666;margin-top:10px;}
+.progress{height:10px;background:#ddd;border-radius:10px;margin-top:10px;}
+.progress-bar{height:10px;background:#00c9a7;border-radius:10px;width:0%;}
+.loader{position:fixed;top:0;left:0;width:100%;height:100%;background:white;display:flex;justify-content:center;align-items:center;font-size:20px;z-index:999;}
+</style>
+</head>
+<body>
+
+<div id="loader" class="loader">🔄 Loading CareSync Health...</div>
+
+<div class="app" style="display:none" id="app">
+<header>
+<div class="logo">💙</div>
+<h2>CareSync Health</h2>
+<p id="time"></p>
+</header>
+
+<nav>
+<button onclick="show('home')">🏠</button>
+<button onclick="show('dashboard')">📊</button>
+<button onclick="show('meds')">💊</button>
+<button onclick="show('learn')">🎯</button>
+<button onclick="show('chat')">🤖</button>
+</nav>
+
+<div class="container">
+
+<div id="home">
+<div class="card">
+<h3>👤 Profile</h3>
+<input id="name" placeholder="Name">
+<input id="age" placeholder="Age">
+<button class="action" onclick="saveProfile()">Save</button>
+<p id="profileStatus"></p>
+</div>
+
+<div class="card">
+<h3>🔔 Medication Reminder</h3>
+<input id="reminderTime" type="time">
+<button class="action" onclick="setReminder()">Set Reminder</button>
+</div>
+</div>
+
+<div id="dashboard" class="hidden">
+<div class="card">
+<h3>📊 BP Monitor</h3>
+<input id="bp" placeholder="Enter systolic">
+<button class="action" onclick="addBP()">Add</button>
+<div id="bpStatus"></div>
+<div class="progress"><div id="riskBar" class="progress-bar"></div></div>
+<p id="lastUpdate" class="small"></p>
+<canvas id="chart"></canvas>
+<button class="action" onclick="exportCSV()">Export Data</button>
+</div>
+</div>
+
+<div id="meds" class="hidden">
+<div class="card">
+<h3>💊 Medications</h3>
+<input id="med" placeholder="Add medication">
+<button class="action" onclick="addMed()">Add</button>
+<ul id="medList"></ul>
+</div>
+</div>
+
+<div id="learn" class="hidden">
+<div class="card">
+<h3>🎯 Care Plan</h3>
+<p id="plan"></p>
+<button class="action" onclick="generatePlan()">Generate Plan</button>
+<p class="small">🔐 Secure: Data stored locally only</p>
+</div>
+</div>
+
+<div id="chat" class="hidden">
+<div class="card">
+<div class="chat-box" id="chatBox"></div>
+<input id="msg" placeholder="Ask AI nurse...">
+<button class="action" onclick="send()">Send</button>
+</div>
+</div>
+
+</div></div>
+
+<script>
+
+// Loader
+setTimeout(()=>{loader.style.display='none';app.style.display='block';},1500);
+
+// Time display
+setInterval(()=>{
+let now=new Date();
+time.innerText=now.toLocaleString();
+},1000);
+
+function show(id){document.querySelectorAll('.container > div').forEach(d=>d.classList.add('hidden'));document.getElementById(id).classList.remove('hidden');}
+
+function saveProfile(){localStorage.setItem('name',name.value);localStorage.setItem('age',age.value);profileStatus.innerText='Saved successfully';}
+
+function setReminder(){localStorage.setItem('reminder',reminderTime.value);} 
+setInterval(()=>{
+let t=localStorage.getItem('reminder');
+if(!t)return;
+let now=new Date().toTimeString().slice(0,5);
+if(now===t){
+alert('💊 Medication time');
+navigator.vibrate?.(200);
+new Audio('https://www.soundjay.com/buttons/sounds/beep-01a.mp3').play();
+}
+},60000);
+
+let data=JSON.parse(localStorage.getItem('bpData')||'[]');
+let ctx=document.getElementById('chart').getContext('2d');let chart;
+function renderChart(){if(chart)chart.destroy();chart=new Chart(ctx,{type:'line',data:{labels:data.map((_,i)=>i+1),datasets:[{label:'BP',data:data}]}});} 
+function addBP(){let v=Number(bp.value);data.push(v);localStorage.setItem('bpData',JSON.stringify(data));renderChart();updateStatus(v);lastUpdate.innerText='Last updated: '+new Date().toLocaleTimeString();}
+function updateStatus(v){let c='green',t='Normal',w='30%';if(v>=140){c='amber';t='Elevated';w='60%';}if(v>=160){c='red';t='High Risk';w='90%';}
+bpStatus.innerHTML=`<span class='badge ${c}'>${t}</span>`;riskBar.style.width=w;}
+setTimeout(renderChart,300);
+
+function addMed(){let m=med.value;let list=JSON.parse(localStorage.getItem('meds')||'[]');list.push(m);localStorage.setItem('meds',JSON.stringify(list));renderMeds();}
+function renderMeds(){let list=JSON.parse(localStorage.getItem('meds')||'[]');medList.innerHTML=list.map(i=>`<li>${i}</li>`).join('');}
+renderMeds();
+
+function generatePlan(){
+let avg=data.reduce((a,b)=>a+b,0)/data.length||0;
+let p='Maintain healthy lifestyle with balanced diet and regular exercise.';
+if(avg>=140) p='Elevated BP: Reduce sodium, exercise daily, monitor BP twice a day.';
+if(avg>=160) p='High BP: Immediate consultation, strict diet, medication adherence required.';
+if(avg>=180) p='Critical: Seek emergency care immediately.';
+plan.innerText=p;
+}
+
+function send(){
+let m=msg.value.toLowerCase();if(!m)return;
+chatBox.innerHTML+=`<div class='message user'>${m}</div>`;
+let r='Stay healthy and monitor regularly.';
+if(m.includes('bp')||m.includes('pressure')) r='Check BP twice daily and record it.';
+else if(m.includes('diet')) r='Follow DASH diet: low salt, more vegetables.';
+else if(m.includes('exercise')) r='Exercise at least 30 minutes daily.';
+else if(m.includes('headache')) r='Monitor BP; headaches may indicate hypertension.';
+else if(m.includes('medication')) r='Take medications on time as prescribed.';
+else if(m.includes('stress')) r='Practice relaxation techniques and proper sleep.';
+chatBox.innerHTML+=`<div class='message nurse'>${r}</div>`;
+msg.value='';
+}
+
+function exportCSV(){let csv='BP\n'+data.join('\n');let blob=new Blob([csv]);let a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='bp.csv';a.click();}
+
+</script>
+</body>
+</html>
